@@ -33,6 +33,7 @@ namespace Infrastructure
             services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddTransient<IIpAddressAccesorService, IpAddressAccesorService>();
+            services.AddTransient(typeof(IRefreshTokenService), typeof(RefreshTokenService));   
             services.AddTransient<IAuthService, AuthService>();
         }
     }
