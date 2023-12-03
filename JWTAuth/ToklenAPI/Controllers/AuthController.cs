@@ -16,7 +16,7 @@ namespace ToklenAPI.Controllers
             _userRepository = userRepository;
         }
 
-        [HttpPost("register")]
+        [HttpPost("register")] 
         public async Task<IActionResult> Register([FromBody] UserRegisterDto user)
         {
             var result = await _userRepository.Register(user);
@@ -29,5 +29,11 @@ namespace ToklenAPI.Controllers
             return Ok(result);
         }
 
+        [HttpPost("refreshsession")]
+        public async Task<IActionResult> RefreshSession([FromQuery] int userid)
+        {
+            var result = await _userRepository.RefreshSessionToken(userid);
+            return Ok(result);
+        }
     }
 }
