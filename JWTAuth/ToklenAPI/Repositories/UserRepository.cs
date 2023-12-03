@@ -1,22 +1,33 @@
 ﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Options;
+using Microsoft.IdentityModel.Tokens;
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using ToklenAPI.Data;
 using ToklenAPI.Interfaces;
 using ToklenAPI.Models;
 using ToklenAPI.Models.Dtos;
+using ToklenAPI.Models.Dtos.JWTToken;
+using ToklenAPI.Models.Session;
 
 namespace ToklenAPI.Repositories
 {
     public class UserRepository : IUserRepository
     {
         private readonly ApplicationDbContext _context;
+        private readonly JWTSettings _jwtSettings;
+        private readonly IHttpContextAccessor _httpAccesor;
+
         private string secretKey;
 
-        public UserRepository(ApplicationDbContext bd, IConfiguration configuration)
+        public UserRepository(ApplicationDbContext bd, IConfiguration configuration, IOptions<JWTSettings> jwtSettings, IHttpContextAccessor httpAccesor)
         {
             _context = bd;
             secretKey = configuration.GetValue<string>("JwtSettings:key");
+            _jwtSettings = jwtSettings.Value;
+            _httpAccesor = httpAccesor;
         }
 
         public async Task<string> Register (UserRegisterDto register){
@@ -26,12 +37,13 @@ namespace ToklenAPI.Repositories
             {
                 throw new BadHttpRequestException("User already exists");
             }
-
+            var salt = GenerateSalt();
             var newUser = new User
             {
                 Email = register.Email,
                 Fullname = register.Fullname,
-                Password = HashPassword(register.Password, GenerateSalt()),
+                PasswordHash = HashPassword(register.Password, salt),
+                Salt = salt
             };
             await _context.Users.AddAsync(newUser);
 
@@ -43,7 +55,7 @@ namespace ToklenAPI.Repositories
             return $"user {register.Email} has been created";
         }
 
-        private  byte[] GenerateSalt()
+        private byte[] GenerateSalt()
         {
             using (var rng = new RNGCryptoServiceProvider())
             {
@@ -63,9 +75,113 @@ namespace ToklenAPI.Repositories
             }
         }
 
-        public string Login()
+        public async Task<JWTResult> Login(UserLoginDto login)
         {
-            return "";
+            var user = await _context.Users.FirstOrDefaultAsync(x => x.Email == login.Email);
+            if (user==null) 
+            {
+                throw new BadHttpRequestException("Check email or password");
+            }
+            if ( user.PasswordHash != HashPassword(login.Password, user.Salt))
+            {
+                throw new BadHttpRequestException("Check email or password");
+            }
+            var jwtResult = GenerateJWTToken(login.Email);
+            await GenerateRefreshToken(user);
+
+
+            return jwtResult;
+        }
+        private JWTResult GenerateJWTToken(string email)
+        {
+            //Claims
+            var claims = new List<Claim>
+            {
+                new ("email", email),
+                new ("active","true")
+            };
+            var claimsIdentity = new ClaimsIdentity(claims,"defaultLogin");
+
+            //JWT Configuration
+            var expirationDate = DateTime.UtcNow.AddMinutes(_jwtSettings.Duration);
+            var symetricSecurityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
+            var signInCredentials = new SigningCredentials(symetricSecurityKey, SecurityAlgorithms.HmacSha256);
+
+            var jwtSecurityToken = new JwtSecurityToken(
+                issuer: _jwtSettings.Issuer,
+                audience: _jwtSettings.Audience,
+                claims: claimsIdentity.Claims,
+                expires: expirationDate,
+                signingCredentials: signInCredentials
+            );
+
+            //JWT Result
+            var tokenResult = new JWTResult
+            {
+                Email = email,
+                JWToken = new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken),
+                JWTExpires = expirationDate,
+            };
+
+
+            return tokenResult;
+        }
+        private async Task GenerateRefreshToken(User user)
+        {
+            var refreshToken = new RefreshToken
+            {
+                Id = Guid.NewGuid(),
+                UserId = user.Id,
+                CreatedByIp = GenerateIpAddress(),
+                Expires = DateTime.UtcNow.AddDays(30),
+                Token = RandomTokenString(),
+            };
+
+            await _context.AddAsync(refreshToken);
+            var result = await _context.SaveChangesAsync();
+            if(result==0)
+            {
+                throw new BadHttpRequestException("Error at login, try again");
+            }
+
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Expires = refreshToken.Expires,
+                SameSite = SameSiteMode.Strict,
+                Secure = true
+            };
+
+            _httpAccesor.HttpContext.Response.Cookies.Append("refreshToken", refreshToken.Token, cookieOptions);
+
+        }
+        private string GenerateIpAddress()
+        {
+            var httpContext = _httpAccesor.HttpContext;
+
+            if (httpContext == null)
+            {
+                return "IP Unavailable";
+            }
+
+            if (httpContext.Request.Headers.ContainsKey("X-Forwarded-For"))
+            {
+                return httpContext.Request.Headers["X-Forwarded-For"].FirstOrDefault();
+            }
+            else if (httpContext.Connection.RemoteIpAddress != null)
+            {
+                return httpContext.Connection.RemoteIpAddress.ToString();
+            }
+
+            return "IP Unavailable";
+        }
+        private string RandomTokenString()
+        {
+            using var rngCryptoServicesProvider = new RNGCryptoServiceProvider();
+            var randomBytes = new byte[40];
+            rngCryptoServicesProvider.GetBytes(randomBytes);
+
+            return BitConverter.ToString(randomBytes).Replace("-", "");
         }
     }
 }
