@@ -22,6 +22,12 @@ namespace ToklenAPI.Controllers
             var result = await _userRepository.Register(user);
             return Ok(result);
         }
+        [HttpPost("login")]
+        public async Task<IActionResult> Login([FromBody] UserLoginDto user)
+        {
+            var result = await _userRepository.Login(user);
+            return Ok(result);
+        }
 
     }
 }
