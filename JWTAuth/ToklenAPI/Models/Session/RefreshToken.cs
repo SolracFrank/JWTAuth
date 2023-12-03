@@ -8,7 +8,7 @@ namespace ToklenAPI.Models.Session
         public Guid Id { get; set; }
 
         [Required]
-        public string UserId { get; set; }
+        public int UserId { get; set; }
 
         [Required]
         public string Token { get; set; }
@@ -26,9 +26,9 @@ namespace ToklenAPI.Models.Session
 
         public DateTime? Revoked { get; set; }
 
-        public string RevokedByIp { get; set; }
+        public string? RevokedByIp { get; set; }
 
-        public string TokenReplaced { get; set; }
+        public string? TokenReplaced { get; set; }
 
         public bool isActive => Revoked == null && !IsExpired;
     }

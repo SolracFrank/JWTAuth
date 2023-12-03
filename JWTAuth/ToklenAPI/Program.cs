@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using ToklenAPI.Data;
 using ToklenAPI.Interfaces;
+using ToklenAPI.Models.Dtos.JWTToken;
 using ToklenAPI.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
         builder.EnableRetryOnFailure(4, TimeSpan.FromSeconds(5), null);
     })
 );
+builder.Services.Configure<JWTSettings>(builder.Configuration.GetSection("JwtSettings"));
 
 builder.Services.AddTransient<IUserRepository, UserRepository>();
 
