@@ -1,3 +1,4 @@
+using Application;
 using Infrastructure;
 using ToklenAPI.Filters;
 
@@ -10,6 +11,9 @@ var isDevelopment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT")
 //add infrastructure
 builder.Services.AddInfrastructure(builder.Configuration);
 
+//add application
+builder.Services.AddApplication();
+
 builder.Services.AddControllers(options =>
 {
     options.Filters.Add<GlobalExceptionFilter>();
@@ -17,6 +21,8 @@ builder.Services.AddControllers(options =>
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddProblemDetails();
 
 builder.Services.AddHttpContextAccessor();
 
