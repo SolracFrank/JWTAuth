@@ -1,39 +1,41 @@
-﻿using Microsoft.AspNetCore.Mvc;
-using ToklenAPI.Interfaces;
-using ToklenAPI.Models.Dtos;
+﻿using Application.features.Auth.Login;
+using Application.features.Auth.RefreshSession;
+using Application.features.Auth.Register;
+using Microsoft.AspNetCore.Mvc;
 
 namespace ToklenAPI.Controllers
 {
     [Route("api/[controller]")]
     [ApiController]
-    public class AuthController : ControllerBase
+    public class AuthController : BaseApiController
     {
-        
-        private readonly IUserRepository _userRepository;
-
-        public AuthController(IUserRepository userRepository)
-        {
-            _userRepository = userRepository;
-        }
 
         [HttpPost("register")] 
-        public async Task<IActionResult> Register([FromBody] UserRegisterDto user)
+        public async Task<IActionResult> Register([FromBody] RegisterCommand request,CancellationToken cancellationToken)
         {
-            var result = await _userRepository.Register(user);
-            return Ok(result);
+            var result = await Mediator.Send(new RegisterCommand
+            {
+                Email = request.Email,
+                Fullname = request.Fullname,
+                Password = request.Password,
+            }, cancellationToken);
+
+            return result.ToOk();
         }
+
         [HttpPost("login")]
-        public async Task<IActionResult> Login([FromBody] UserLoginDto user)
+        public async Task<IActionResult> Login([FromBody] LoginCommand request, CancellationToken cancellationToken)
         {
-            var result = await _userRepository.Login(user);
-            return Ok(result);
+           var result = await Mediator.Send(new LoginCommand { Email = request.Email,Password = request.Password },cancellationToken);
+
+            return result.ToOk();
         }
 
         [HttpPost("refreshsession")]
-        public async Task<IActionResult> RefreshSession([FromQuery] int userid)
+        public async Task<IActionResult> RefreshSession([FromQuery] RefreshSessionCommand request, CancellationToken cancellationToken)
         {
-            var result = await _userRepository.RefreshSessionToken(userid);
-            return Ok(result);
+            var result = await Mediator.Send(new RefreshSessionCommand { UserId = request.UserId},cancellationToken);
+            return result.ToOk();
         }
     }
 }
