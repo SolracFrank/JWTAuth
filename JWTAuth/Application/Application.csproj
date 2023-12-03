@@ -9,5 +9,11 @@
   <ItemGroup>
     <ProjectReference Include="..\Domain\Domain.csproj" />
   </ItemGroup>
+	<ItemGroup>
+		<PackageReference Include="FluentValidation" Version="11.8.0" />
+		<PackageReference Include="MediatR" Version="12.1.1" />
+		<PackageReference Include="LanguageExt.Core" Version="4.4.5" />
+		<PackageReference Include="Microsoft.AspNetCore.Http.Abstractions" Version="2.2.0" />
+	</ItemGroup>
 
 </Project>
