@@ -6,10 +6,6 @@ using Infrastructure.Helpers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
-using Microsoft.IdentityModel.Tokens;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 using ToklenAPI.Models;
 using ToklenAPI.Models.Dtos;
 using ToklenAPI.Models.Dtos.JWTToken;
@@ -23,13 +19,15 @@ namespace Infrastructure.Services.Auth
         private readonly IHttpContextAccessor _httpAccesor;
         private readonly IIpAddressAccesorService _ipAccessor;
         private readonly IUnitOfWork _unitOfWork;
+        private readonly IRefreshTokenService _refreshTokenService;
 
-        public AuthService(IConfiguration configuration, IOptions<JWTSettings> jwtSettings, IHttpContextAccessor httpAccesor, IIpAddressAccesorService ipAccessor, IUnitOfWork unitOfWork)
+        public AuthService(IConfiguration configuration, IOptions<JWTSettings> jwtSettings, IHttpContextAccessor httpAccesor, IIpAddressAccesorService ipAccessor, IUnitOfWork unitOfWork, IRefreshTokenService refreshTokenService)
         {
             _jwtSettings = jwtSettings.Value;
             _httpAccesor = httpAccesor;
             _ipAccessor = ipAccessor;
             _unitOfWork = unitOfWork;
+            _refreshTokenService = refreshTokenService;
         }
 
         public async Task<string> Register(UserRegisterDto register, CancellationToken cancellationToken)
@@ -40,6 +38,7 @@ namespace Infrastructure.Services.Auth
             {
                 throw new BadRequestException("User already exists");
             }
+
             var salt = PasswordHasher.GenerateSalt();
             var newUser = new User
             {
@@ -48,6 +47,7 @@ namespace Infrastructure.Services.Auth
                 PasswordHash = PasswordHasher.HashPassword(register.Password, salt),
                 Salt = salt
             };
+
             await _unitOfWork.BasicUsers.AddAsync(newUser,cancellationToken);
 
             var result = await _unitOfWork.SaveChangesAsync(cancellationToken);
@@ -69,8 +69,8 @@ namespace Infrastructure.Services.Auth
             {
                 throw new BadRequestException("Check email or password");
             }
-            var jwtResult = GenerateJWTToken(login.Email);
-            await GenerateRefreshToken(user,cancellationToken);
+            var jwtResult = JwtTokenGenerator.GenerateJWTToken(login.Email,_jwtSettings);
+            await _refreshTokenService.GenerateRefreshToken(user,cancellationToken);
 
 
             return jwtResult;
@@ -103,7 +103,7 @@ namespace Infrastructure.Services.Auth
             {
                 throw new NotFoundException("Session has expired");
             }
-            var jwtResult = GenerateJWTToken(user.Email);
+            var jwtResult = JwtTokenGenerator.GenerateJWTToken(user.Email,_jwtSettings);
 
             var newRefreshToken = new RefreshToken
             {
@@ -128,81 +128,9 @@ namespace Infrastructure.Services.Auth
                 throw new BadRequestException("Error at updating session, try again");
             }
 
-            var cookieOptions = new CookieOptions
-            {
-                HttpOnly = true,
-                Expires = newRefreshToken.Expires,
-                SameSite = SameSiteMode.Strict,
-                Secure = true
-            };
-
-            _httpAccesor.HttpContext.Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
+            _refreshTokenService.RefreshTokenCookies(newRefreshToken.Expires, newRefreshToken.Token);
             return jwtResult;
         }
-        private JWTResult GenerateJWTToken(string email)
-        {
-            //Claims
-            var claims = new List<Claim>
-            {
-                new ("email", email),
-                new ("active","true")
-            };
-            var claimsIdentity = new ClaimsIdentity(claims, "defaultLogin");
-
-            //JWT Configuration
-            var expirationDate = DateTime.UtcNow.AddMinutes(_jwtSettings.Duration);
-            var symetricSecurityKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(_jwtSettings.Key));
-            var signInCredentials = new SigningCredentials(symetricSecurityKey, SecurityAlgorithms.HmacSha256);
-
-            var jwtSecurityToken = new JwtSecurityToken(
-                issuer: _jwtSettings.Issuer,
-                audience: _jwtSettings.Audience,
-                claims: claimsIdentity.Claims,
-                expires: expirationDate,
-                signingCredentials: signInCredentials
-            );
-
-            //JWT Result
-            var tokenResult = new JWTResult
-            {
-                Email = email,
-                JWToken = new JwtSecurityTokenHandler().WriteToken(jwtSecurityToken),
-                JWTExpires = expirationDate,
-            };
-
-
-            return tokenResult;
-        }
-        private async Task GenerateRefreshToken(User user, CancellationToken cancellationToken)
-        {
-            var refreshToken = new RefreshToken
-            {
-                Id = Guid.NewGuid(),
-                UserId = user.Id,
-                CreatedByIp = _ipAccessor.GenerateIpAddress(),
-                Expires = DateTime.UtcNow.AddDays(30),
-                Token = RefreshTokenStringGenerator.RandomTokenString(),
-            };
-
-            await _unitOfWork.RefreshTokens.AddAsync(refreshToken,cancellationToken);
-            var result = await _unitOfWork.SaveChangesAsync(cancellationToken);
-            if (!result)
-            {
-                throw new BadHttpRequestException("Error at login, try again");
-            }
-
-            var cookieOptions = new CookieOptions
-            {
-                HttpOnly = true,
-                Expires = refreshToken.Expires,
-                SameSite = SameSiteMode.Strict,
-                Secure = true
-            };
-
-            _httpAccesor.HttpContext.Response.Cookies.Append("refreshToken", refreshToken.Token, cookieOptions);
-
-        }
-       
-    
+        
     }
 }
