@@ -92,6 +92,69 @@ namespace ToklenAPI.Repositories
 
             return jwtResult;
         }
+        public async Task<JWTResult> RefreshSessionToken(int userId)
+        {
+            //Validations
+            var user = _context.Users.FirstOrDefault(x => x.Id == userId);
+            if (user == null)
+            {
+                throw new BadHttpRequestException("User doesn't exist");
+            }
+
+            var oldRefreshToken = _httpAccesor.HttpContext.Request.Cookies["refreshToken"];
+            if (oldRefreshToken == null) { 
+                throw new BadHttpRequestException("Problems updating session");
+            }
+
+            var storedRefresh = await _context.RefreshTokens.FirstOrDefaultAsync(x => x.UserId == userId);
+            if (storedRefresh == null)
+            {
+                throw new BadHttpRequestException("Problems updating session");
+            }
+            if(storedRefresh.Revoked != null)
+            {
+                throw new BadHttpRequestException("Session has been revoked");
+            }
+            if (storedRefresh.IsExpired)
+            {
+                throw new BadHttpRequestException("Session has expired");
+            }
+            var jwtResult = GenerateJWTToken(user.Email);
+
+            var newRefreshToken = new RefreshToken
+            {
+                Id = new Guid(),
+                UserId = userId,
+                CreatedByIp = GenerateIpAddress(),
+                Expires = DateTime.UtcNow.AddDays(30),
+                Token = RandomTokenString(),
+            };
+
+            storedRefresh.TokenReplaced = newRefreshToken.Token;
+            storedRefresh.Revoked = DateTime.UtcNow;
+            storedRefresh.RevokedByIp = GenerateIpAddress();
+
+
+             _context.RefreshTokens.Update(storedRefresh);
+            await _context.AddAsync(newRefreshToken);
+
+            var result = await _context.SaveChangesAsync();
+            if (result == 0)
+            {
+                throw new BadHttpRequestException("Error at updating session, try again");
+            }
+
+            var cookieOptions = new CookieOptions
+            {
+                HttpOnly = true,
+                Expires = newRefreshToken.Expires,
+                SameSite = SameSiteMode.Strict,
+                Secure = true
+            };
+
+            _httpAccesor.HttpContext.Response.Cookies.Append("refreshToken", newRefreshToken.Token, cookieOptions);
+            return jwtResult;
+        }
         private JWTResult GenerateJWTToken(string email)
         {
             //Claims

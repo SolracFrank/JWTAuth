@@ -7,6 +7,7 @@ namespace ToklenAPI.Interfaces
     {
         public Task<string> Register(UserRegisterDto register);
         public Task<JWTResult> Login(UserLoginDto login);
+        public Task<JWTResult> RefreshSessionToken(int userId);
 
     }
 }
