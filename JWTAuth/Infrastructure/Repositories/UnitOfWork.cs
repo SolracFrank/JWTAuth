@@ -13,10 +13,9 @@ namespace Infrastructure.Repositories
         private readonly ApplicationDbContext _context;
         private IDbContextTransaction _currentTransaction;
 
-        public UnitOfWork(ApplicationDbContext context, IDbContextTransaction currentTransaction, IRepository<User> basicUsers, IRepository<RefreshToken> refreshTokens)
+        public UnitOfWork(ApplicationDbContext context, IRepository<User> basicUsers, IRepository<RefreshToken> refreshTokens)
         {
             _context = context;
-            _currentTransaction = currentTransaction;
             BasicUsers = basicUsers;
             RefreshTokens = refreshTokens;
         }
