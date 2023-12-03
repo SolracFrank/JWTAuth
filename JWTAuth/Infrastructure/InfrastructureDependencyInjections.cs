@@ -1,12 +1,14 @@
-﻿using Domain.Interfaces;
+﻿using Application.Interfaces.AppServices;
+using Application.Interfaces.Auth;
+using Domain.Interfaces;
 using Infrastructure.Repositories;
+using Infrastructure.Services.AppServices;
+using Infrastructure.Services.Auth;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using ToklenAPI.Data;
-using ToklenAPI.Interfaces;
 using ToklenAPI.Models.Dtos.JWTToken;
-using ToklenAPI.Repositories;
 
 namespace Infrastructure
 {
@@ -30,7 +32,8 @@ namespace Infrastructure
             //Add services
             services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
             services.AddScoped<IUnitOfWork, UnitOfWork>();
-            services.AddTransient<IUserRepository, UserRepository>();
+            services.AddTransient<IIpAddressAccesorService, IpAddressAccesorService>();
+            services.AddTransient<IAuthService, AuthService>();
         }
     }
 }
