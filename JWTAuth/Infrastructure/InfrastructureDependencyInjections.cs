@@ -2,11 +2,13 @@
 using Application.Interfaces.Auth;
 using Domain.Exceptions;
 using Domain.Interfaces;
+using Infrastructure.CustomEntities;
 using Infrastructure.Repositories;
 using Infrastructure.Services.AppServices;
 using Infrastructure.Services.Auth;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -31,6 +33,20 @@ namespace Infrastructure
                     builder.EnableRetryOnFailure(4, TimeSpan.FromSeconds(5), null);
                 })
             );
+
+            //Add .Net Identity
+            services.AddIdentity<AdvancedUser, IdentityRole>()
+                .AddEntityFrameworkStores<ApplicationDbContext>()
+                .AddDefaultTokenProviders();
+
+            services.Configure<IdentityOptions>(o =>
+            {
+                o.Password.RequiredLength = 8;
+                o.Password.RequireLowercase = true;
+                o.Password.RequireUppercase = true;
+                o.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromSeconds(15);
+                o.Lockout.MaxFailedAccessAttempts = 3;
+            });
 
             //configure appsettings / usersecrets
             services.Configure<JWTSettings>(configuration.GetSection("JwtSettings"));
@@ -95,6 +111,8 @@ namespace Infrastructure
                     }
                 };
             });
+
+        
         }
     }
 }

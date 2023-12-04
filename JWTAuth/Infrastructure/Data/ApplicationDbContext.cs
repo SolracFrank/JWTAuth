@@ -1,10 +1,12 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using Infrastructure.CustomEntities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using ToklenAPI.Models;
 using ToklenAPI.Models.Session;
 
 namespace ToklenAPI.Data
 {
-    public class ApplicationDbContext : DbContext
+    public class ApplicationDbContext : IdentityDbContext<AdvancedUser>
     {
         public ApplicationDbContext(DbContextOptions options) : base(options) { }
 
