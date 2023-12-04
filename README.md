@@ -13,6 +13,6 @@ This is an example project where I'll cover some auth concepts such as JWT Token
 ## History:
 
 - **03/12/23**  BasicAuth Branch: Finished basic functions such as Login, Register, and Session Update (Using JWT Token and Refresh Token). Not using SOLID principles.
-- **03/12/23**  Refactor-BasicAuth Branch: Refactor the project in order to cumplir with SOLID principles; using ONION and CQRS architecture.
+- **03/12/23**  Refactor-BasicAuth Branch: Refactor the project in order to keep with SOLID principles; using ONION and CQRS architecture.
 
   
