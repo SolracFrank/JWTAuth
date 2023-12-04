@@ -2,8 +2,11 @@
 using Application.Interfaces.Auth;
 using Domain.Exceptions;
 using Domain.Interfaces;
+using Domain.Models.Dtos.IdentityDtos;
+using Infrastructure.CustomEntities;
 using Infrastructure.Helpers;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using ToklenAPI.Models;
@@ -16,18 +19,22 @@ namespace Infrastructure.Services.Auth
     public class AuthService : IAuthService
     {
         private readonly JWTSettings _jwtSettings;
+        private readonly UserManager<AdvancedUser> _userManager;
+        private readonly RoleManager<IdentityRole> _roleManager;
         private readonly IHttpContextAccessor _httpAccesor;
         private readonly IIpAddressAccesorService _ipAccessor;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IRefreshTokenService _refreshTokenService;
 
-        public AuthService(IConfiguration configuration, IOptions<JWTSettings> jwtSettings, IHttpContextAccessor httpAccesor, IIpAddressAccesorService ipAccessor, IUnitOfWork unitOfWork, IRefreshTokenService refreshTokenService)
+        public AuthService(IConfiguration configuration, IOptions<JWTSettings> jwtSettings, IHttpContextAccessor httpAccesor, IIpAddressAccesorService ipAccessor, IUnitOfWork unitOfWork, IRefreshTokenService refreshTokenService, UserManager<AdvancedUser> userManager, RoleManager<IdentityRole> roleManager)
         {
             _jwtSettings = jwtSettings.Value;
             _httpAccesor = httpAccesor;
             _ipAccessor = ipAccessor;
             _unitOfWork = unitOfWork;
             _refreshTokenService = refreshTokenService;
+            _userManager = userManager;
+            _roleManager = roleManager;
         }
 
         public async Task<string> Register(UserRegisterDto register, CancellationToken cancellationToken)
@@ -70,7 +77,7 @@ namespace Infrastructure.Services.Auth
                 throw new BadRequestException("Check email or password");
             }
             var jwtResult = JwtTokenGenerator.GenerateJWTToken(login.Email,_jwtSettings);
-            await _refreshTokenService.GenerateRefreshToken(user,cancellationToken);
+            await _refreshTokenService.GenerateRefreshToken(user.Id.ToString(),cancellationToken);
 
 
             return jwtResult;
@@ -90,7 +97,7 @@ namespace Infrastructure.Services.Auth
                 throw new BadRequestException("Problems updating session");
             }
 
-            var storedRefresh = await _unitOfWork.RefreshTokens.FirstOrDefaultAsync(x => x.UserId == userId,cancellationToken);
+            var storedRefresh = await _unitOfWork.RefreshTokens.FirstOrDefaultAsync(x => x.UserId == userId.ToString(),cancellationToken);
             if (storedRefresh == null)
             {
                 throw new BadRequestException("Problems updating session");
@@ -108,7 +115,7 @@ namespace Infrastructure.Services.Auth
             var newRefreshToken = new RefreshToken
             {
                 Id = new Guid(),
-                UserId = userId,
+                UserId = userId.ToString(),
                 CreatedByIp = _ipAccessor.GenerateIpAddress(),
                 Expires = DateTime.UtcNow.AddDays(30),
                 Token = RefreshTokenStringGenerator.RandomTokenString(),
@@ -131,6 +138,62 @@ namespace Infrastructure.Services.Auth
             _refreshTokenService.RefreshTokenCookies(newRefreshToken.Expires, newRefreshToken.Token);
             return jwtResult;
         }
-        
+
+        public async Task<string> IdentityRegister(IdentityUserRegisterDto register, CancellationToken cancellationToken)
+        {
+            if (!await _roleManager.RoleExistsAsync("Admin"))
+            {
+                await _roleManager.CreateAsync(new IdentityRole("Admin"));
+            }
+            if (!await _roleManager.RoleExistsAsync("Basic"))
+            {
+                await _roleManager.CreateAsync(new IdentityRole("Basic"));
+            }
+
+            var user = await _userManager.FindByEmailAsync(register.Email);
+
+            if (user != null)
+            {
+                throw new BadRequestException("User already exists");
+            }
+            user.Email = register.Email; user.UserName = register.UserName; user.BirthDate = register.BirthDate;
+
+            var result = await _userManager.CreateAsync(user, register.Password);
+
+            if (result.Succeeded)
+            {
+
+                await _userManager.AddToRoleAsync(user, "Basic");
+
+                return "User registered succesfully";
+            }
+            else if (result.Errors.Count() > 0)
+            {
+                throw new BadRequestException("Error registering user");
+
+            }
+            throw new BadRequestException("Unexpected Error");
+        }
+
+        public async Task<JWTResult> IdentityLogin(IdentityUserLoginDto login, CancellationToken cancellationToken)
+        {
+            var user = await _userManager.FindByEmailAsync(login.Email);
+            if (user == null)
+            {
+                throw new BadRequestException("Check email or password");
+            }
+            var validPassowrd = await _userManager.CheckPasswordAsync(user,login.Password);
+
+            if (!validPassowrd)
+            {
+                throw new BadRequestException("Check email or password");
+            }
+
+            var jwtResult = JwtTokenGenerator.GenerateJWTToken(login.Email, _jwtSettings);
+            await _refreshTokenService.GenerateRefreshToken(user.Id, cancellationToken);
+
+
+            return jwtResult;
+        }
     }
 }
