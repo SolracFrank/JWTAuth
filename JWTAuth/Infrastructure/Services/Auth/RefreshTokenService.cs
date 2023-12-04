@@ -3,7 +3,6 @@ using Application.Interfaces.Auth;
 using Domain.Interfaces;
 using Infrastructure.Helpers;
 using Microsoft.AspNetCore.Http;
-using ToklenAPI.Models;
 using ToklenAPI.Models.Session;
 
 namespace Infrastructure.Services.Auth
@@ -21,12 +20,12 @@ namespace Infrastructure.Services.Auth
             _unitOfWork = unitOfWork;
         }
 
-        public async Task GenerateRefreshToken(User user, CancellationToken cancellationToken)
+        public async Task GenerateRefreshToken(string userId, CancellationToken cancellationToken)
         {
             var refreshToken = new RefreshToken
             {
                 Id = Guid.NewGuid(),
-                UserId = user.Id,
+                UserId = userId,
                 CreatedByIp = _ipAccessor.GenerateIpAddress(),
                 Expires = DateTime.UtcNow.AddDays(30),
                 Token = RefreshTokenStringGenerator.RandomTokenString(),
